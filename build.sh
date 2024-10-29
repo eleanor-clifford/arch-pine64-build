@@ -18,7 +18,7 @@ date=$(date +%Y%m%d)
 
 error() { echo -e "\e[41m\e[5mERROR:\e[49m\e[25m $1" && exit 1; }
 check_dependency() { [ $(which $1) ] || error "$1 not found. Please make sure it is installed and on your PATH."; }
-usage() { error "$0 [-a ARCHITECTURE] [-d device] [-u ui] [-h hostname] [--osk-sdl] [--noconfirm] [--cachedir directory] [--no-cachedir]"; }
+usage() { error "$0 [-a ARCHITECTURE] [-d device] [-u ui] [-h hostname] [--username username] [--lang lang] [--osk-sdl] [--noconfirm] [--cachedir directory] [--no-cachedir]"; }
 cleanup() {
     trap '' EXIT
     trap '' INT
@@ -51,6 +51,8 @@ parse_args() {
             -d|--device) device=$2; shift ;;
             -u|--ui) ui=$2; shift ;;
             -h|--hostname) hostname=$2; shift ;;
+            --username) username=$2; shift ;;
+            --lang) lang=$2; shift ;;
             --noconfirm) NOCONFIRM=1;;
             --osk-sdl) OSK_SDL=1;;
             --cachedir) cachedir=$2; shift ;;
@@ -198,7 +200,7 @@ set -e
 pacman-key --init
 pacman-key --populate archlinuxarm danctnix
 pacman -Rsn --noconfirm linux-$arch
-pacman -Syu --noconfirm --overwrite=*
+pacman -Syu --noconfirm --overwrite=* --needed
 pacman -S --noconfirm --overwrite=* --needed ${packages_device[@]} ${packages_ui[@]}
 
 
@@ -208,25 +210,28 @@ systemctl disable systemd-resolved
 systemctl enable zramswap
 systemctl enable NetworkManager
 
-usermod -a -G network,video,audio,rfkill,wheel alarm
+userdel alarm
+useradd -m ${username:-alarm}
+
+usermod -a -G network,video,audio,rfkill,wheel $username
 
 $(echo -e "${postinstall[@]}")
 
-cp -rv /etc/skel/. /home/alarm
-chown -R alarm:alarm /home/alarm
+cp -rv /etc/skel/. /home/$username
+chown -R $username:$username /home/$username
 
 if [ -e /etc/sudoers ]; then
     sed -i 's/# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
 fi
 
-cat << FOE | passwd alarm
+cat << FOE | passwd $username
 123456
 123456
 
 FOE
 
 locale-gen
-echo "LANG=en_US.UTF-8" > /etc/locale.conf
+echo "LANG=${lang:-en_US.UTF-8}" > /etc/locale.conf
 
 # remove pacman gnupg keys post generation
 rm -rf /etc/pacman.d/gnupg
